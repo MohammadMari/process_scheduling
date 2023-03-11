@@ -28,13 +28,10 @@ func main() {
 	}
 
 	// First-come, first-serve scheduling
-	//FCFSSchedule(os.Stdout, "First-come, first-serve", processes)
-
+	FCFSSchedule(os.Stdout, "First-come, first-serve", processes)
 	SJFSchedule(os.Stdout, "Shortest-job-first", processes)
-	//
-	//SJFPrioritySchedule(os.Stdout, "Priority", processes)
-	//
-	//RRSchedule(os.Stdout, "Round-robin", processes)
+	SJFPrioritySchedule(os.Stdout, "Priority", processes)
+	RRSchedule(os.Stdout, "Round-robin", processes)
 }
 
 func openProcessingFile(args ...string) (*os.File, func(), error) {
@@ -194,7 +191,7 @@ func SJFPrioritySchedule(w io.Writer, title string, processes []Process) {
 				gantt = append(gantt, TimeSlice{
 					PID:   processes[lastGantIndex].ProcessID,
 					Start: int64(lastGantStartTime),
-					Stop:  int64(timestep),
+					Stop:  int64(timestep + 1),
 				})
 			}
 
@@ -226,7 +223,7 @@ func SJFPrioritySchedule(w io.Writer, title string, processes []Process) {
 	count := float64(len(processes))
 	outputTitle(w, title)
 	outputGantt(w, gantt)
-	outputSchedule(w, schedule, totalWait/count, totalTurnaround/count, lastCompletion/count)
+	outputSchedule(w, schedule, totalWait/count, totalTurnaround/count, count/lastCompletion)
 }
 
 func SJFSchedule(w io.Writer, title string, processes []Process) {
@@ -277,7 +274,7 @@ func SJFSchedule(w io.Writer, title string, processes []Process) {
 				gantt = append(gantt, TimeSlice{
 					PID:   processes[lastGantIndex].ProcessID,
 					Start: int64(lastGantStartTime),
-					Stop:  int64(timestep),
+					Stop:  int64(timestep + 1),
 				})
 			}
 
@@ -314,16 +311,15 @@ func SJFSchedule(w io.Writer, title string, processes []Process) {
 	count := float64(len(processes))
 	outputTitle(w, title)
 	outputGantt(w, gantt)
-	outputSchedule(w, schedule, totalWait/count, totalTurnaround/count, lastCompletion/count)
+	outputSchedule(w, schedule, totalWait/count, totalTurnaround/count, count/lastCompletion)
 }
 
 func RRSchedule(w io.Writer, title string, processes []Process) {
 	var (
-		totalBurstTime int
-		// totalWait       float64
-		// totalTurnaround float64
-		//lastCompletion   float64
-		//queue            = make([]int, len(processes))
+		totalBurstTime   int
+		totalWait        float64
+		totalTurnaround  float64
+		lastCompletion   float64
 		processBurstInit = make([]int, len(processes))
 		schedule         = make([][]string, len(processes))
 		gantt            = make([]TimeSlice, 0)
@@ -357,25 +353,29 @@ func RRSchedule(w io.Writer, title string, processes []Process) {
 			timestep++
 			ranProcess = true
 
-			schedule[i] = []string{
-				fmt.Sprint(processes[i].ProcessID),
-				fmt.Sprint(processes[i].Priority),
-				fmt.Sprint(int(processBurstInit[i])),
-				fmt.Sprint(processes[i].ArrivalTime),
-				fmt.Sprint((timestep + 1) - int(processes[i].ArrivalTime) - int(processBurstInit[i])),
-				fmt.Sprint((timestep + 1) - int(processes[i].ArrivalTime)),
-				fmt.Sprint(timestep + 1),
-			}
-
 			gantt = append(gantt, TimeSlice{
 				PID:   processes[i].ProcessID,
 				Start: int64(timestep - 1),
 				Stop:  int64(timestep),
 			})
 
-		}
+			if processes[i].BurstDuration == 0 {
+				totalTurnaround += float64(int64(timestep+1) - processes[i].ArrivalTime)
+				waitTime := float64((timestep) - int(processes[i].ArrivalTime) - int(processes[i].BurstDuration))
+				totalWait += waitTime
+				lastCompletion = float64(processes[i].BurstDuration + processes[i].ArrivalTime + int64(waitTime))
 
-		print(w, timestep)
+				schedule[i] = []string{
+					fmt.Sprint(processes[i].ProcessID),
+					fmt.Sprint(processes[i].Priority),
+					fmt.Sprint(int(processBurstInit[i])),
+					fmt.Sprint(processes[i].ArrivalTime),
+					fmt.Sprint((timestep + 1) - int(processes[i].ArrivalTime) - int(processBurstInit[i])),
+					fmt.Sprint((timestep + 1) - int(processes[i].ArrivalTime)),
+					fmt.Sprint(timestep + 1),
+				}
+			}
+		}
 
 		if !ranProcess {
 			timestep++
@@ -383,10 +383,10 @@ func RRSchedule(w io.Writer, title string, processes []Process) {
 		}
 	}
 
+	count := float64(len(processes))
 	outputTitle(w, title)
 	outputGantt(w, gantt)
-	outputSchedule(w, schedule, 0, 0, 0)
-
+	outputSchedule(w, schedule, totalWait/count, totalTurnaround/count, count/lastCompletion)
 }
 
 //endregion
